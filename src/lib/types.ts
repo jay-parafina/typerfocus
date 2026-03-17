@@ -68,3 +68,6 @@ export interface QuizResult {
 }
 
 export const QUIZ_PASSING_SCORE = 4;
+export function quizPassingScore(totalQuestions: number): number {
+  return Math.ceil(totalQuestions * 0.8);
+}

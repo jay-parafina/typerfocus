@@ -7,7 +7,7 @@ import { recordPhraseResult, recordQuizResult } from '@/lib/storage';
 import { useTypingEngine } from '@/hooks/useTypingEngine';
 import { PhraseDisplay } from '@/components/PhraseDisplay';
 import { Quiz } from '@/components/Quiz';
-import { Module, PhraseResult, QuizQuestion, QuizResult, Topic } from '@/lib/types';
+import { Module, PhraseResult, QuizQuestion, QuizResult, Topic, quizPassingScore } from '@/lib/types';
 
 export default function TypePage() {
   const router = useRouter();
@@ -214,7 +214,7 @@ function TypingSession({ module, topic, onEscape, onNextModule, onBackToTopic }:
               {module.title}
             </h2>
             <p className="text-sm leading-relaxed mb-4" style={{ color: '#646669' }}>
-              You scored {quizResult.score}/{quizResult.total}. You need at least 4/{quizResult.total} to continue.
+              You scored {quizResult.score}/{quizResult.total}. You need at least {quizPassingScore(quizResult.total)}/{quizResult.total} to continue.
             </p>
 
             <div className="flex justify-center my-14">

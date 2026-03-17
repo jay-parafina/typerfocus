@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { QuizQuestion, QuizOption, QuizResult, QUIZ_PASSING_SCORE } from '@/lib/types';
+import { QuizQuestion, QuizOption, QuizResult, quizPassingScore } from '@/lib/types';
 
 // Fisher-Yates shuffle (non-mutating)
 function shuffleArray<T>(arr: T[]): T[] {
@@ -56,7 +56,7 @@ export function Quiz({ questions, onComplete }: QuizProps) {
       onComplete({
         score,
         total: questions.length,
-        passed: score >= QUIZ_PASSING_SCORE,
+        passed: score >= quizPassingScore(questions.length),
         answers: updatedAnswers,
         timestamp: Date.now(),
       });
