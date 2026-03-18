@@ -1,6 +1,4 @@
 import { Topic } from '@/lib/types';
-import { kiddomWhiteboardTopic } from './kiddom-whiteboard';
-
 export const topics: Topic[] = [
   // ── Topic 1 ────────────────────────────────────────────────────────────────
   {
@@ -8505,7 +8503,6 @@ export const topics: Topic[] = [
       },
     ],
   },
-  kiddomWhiteboardTopic,
 ];
 
 export function getTopicById(id: string): Topic | undefined {
