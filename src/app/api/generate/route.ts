@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
+import { extractFile, enforceCombinedLimit, buildSourceXml, getSourceType, type ExtractedSource } from '@/lib/extractors';
 
-// Allow up to 120 seconds for large topic generation
-export const maxDuration = 120;
+// Allow up to 300 seconds — streaming keeps the connection alive
+export const maxDuration = 300;
 
 function buildSystemPrompt(numSections: number, numExercises: number, numQuestions: number) {
   return `You are an educational content generator for TyperFocus, a neurodivergent-friendly typing practice and e-learning app.
@@ -69,41 +70,84 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  const { topic, numSections, numExercises, numQuestions } = await request.json();
+  const formData = await request.formData();
+  const topic = formData.get('topic') as string | null;
+  const numSections = Number(formData.get('numSections')) || 4;
+  const numExercises = Number(formData.get('numExercises')) || 5;
+  const numQuestions = Number(formData.get('numQuestions')) || 5;
 
   if (!topic || typeof topic !== 'string' || topic.trim().length === 0) {
-    return NextResponse.json({ error: 'Please enter a topic' }, { status: 400 });
+    return NextResponse.json({ error: 'A prompt is required' }, { status: 400 });
   }
 
   if (topic.trim().length > 200) {
     return NextResponse.json({ error: 'Topic is too long — keep it under 200 characters' }, { status: 400 });
   }
 
-  const sections = Math.min(20, Math.max(1, numSections || 4));
-  const exercises = Math.min(20, Math.max(1, numExercises || 5));
-  const questions = Math.min(20, Math.max(1, numQuestions || 5));
+  // Extract uploaded files
+  const files = formData.getAll('files') as File[];
+  const validFiles = files.filter((f) => f.size > 0 && getSourceType(f.name) !== null);
 
-  // Scale max_tokens based on content requested
-  // Each exercise ~30 tokens, each question ~80 tokens, plus section overhead
-  const estimatedTokens = Math.min(16000, sections * (exercises * 35 + questions * 85 + 100) + 500);
+  let sources: ExtractedSource[] = [];
+  let anyTruncated = false;
+
+  for (const file of validFiles) {
+    try {
+      const extracted = await extractFile(file);
+      sources.push(extracted);
+    } catch (err) {
+      console.error(`Failed to extract ${file.name}:`, err);
+    }
+  }
+
+  if (sources.length > 0) {
+    sources = enforceCombinedLimit(sources);
+    anyTruncated = sources.some((s) => s.truncated);
+  }
+
+  const sections = Math.min(8, Math.max(1, numSections));
+  const exercises = Math.min(10, Math.max(1, numExercises));
+  const questions = Math.min(10, Math.max(1, numQuestions));
+
+  // Scale max_tokens: each exercise ~50 tokens, each question ~100 tokens in actual JSON output
+  // Add generous overhead for section structure, keys, and formatting
+  const baseTokens = sections * (exercises * 50 + questions * 120 + 200) + 1000;
+  // Always give at least 8000 tokens — small topics still produce verbose JSON
+  const minTokens = sources.length > 0 ? 16000 : 8000;
+  const estimatedTokens = Math.max(minTokens, Math.min(32000, baseTokens));
+
+  // Build user prompt with optional source material
+  const sourceXml = buildSourceXml(sources);
+  const userPrompt = sourceXml
+    ? `<user_prompt>\n${topic.trim()}\n</user_prompt>\n\n${sourceXml}\n\nGenerate a learning topic based on the user's prompt and the source material above.`
+    : `Generate an educational topic about: ${topic.trim()}`;
+
+  console.log(`[generate] sources=${sources.length}, promptLength=${userPrompt.length}, maxTokens=${estimatedTokens}`);
+  if (sources.length > 0) {
+    sources.forEach((s) => console.log(`  source: ${s.source} (${s.text.length} chars, truncated=${s.truncated})`));
+  }
 
   try {
     const client = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
-      timeout: 110_000, // 110 seconds
     });
 
-    const message = await client.messages.create({
+    // Stream the response to avoid idle-connection timeouts
+    const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: estimatedTokens,
       system: buildSystemPrompt(sections, exercises, questions),
       messages: [
         {
           role: 'user',
-          content: `Generate an educational topic about: ${topic.trim()}`,
+          content: userPrompt,
         },
       ],
     });
+
+    const message = await stream.finalMessage();
+
+    console.log(`[generate] stop_reason=${message.stop_reason}, usage=${JSON.stringify(message.usage)}`);
 
     // Check if response was truncated
     if (message.stop_reason === 'max_tokens') {
@@ -192,7 +236,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ topic: topicRow });
+    return NextResponse.json({ topic: topicRow, anyTruncated });
   } catch (err) {
     console.error('Generate error:', err);
     return NextResponse.json(

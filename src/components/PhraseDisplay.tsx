@@ -36,14 +36,11 @@ export function PhraseDisplay({ text, typedAt, cursorPos, cursorKey }: PhraseDis
         let color: string;
         let displayChar: string;
 
-        if (i < cursorPos) {
-          // Cursor has moved past — was typed correctly
-          color = COLOR_CORRECT;
-          displayChar = char;
-        } else if (i === cursorPos && typed !== undefined) {
-          // Wrong char blocking the cursor here
-          color = COLOR_WRONG;
-          displayChar = typed; // show what the user actually pressed
+        if (typed !== undefined && i < cursorPos) {
+          // Typed — check if correct or wrong
+          const isCorrect = typed === char;
+          color = isCorrect ? COLOR_CORRECT : COLOR_WRONG;
+          displayChar = isCorrect ? char : typed;
         } else {
           // Not yet reached
           color = COLOR_UNTYPED;

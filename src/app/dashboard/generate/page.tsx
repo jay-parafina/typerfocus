@@ -1,63 +1,76 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useGeneration } from '../generation-context';
 
-type Phase = 'topic' | 'customize' | 'generating';
+const ACCEPTED_EXTENSIONS = '.pdf,.docx,.txt,.md';
+
+type Phase = 'topic' | 'customize';
 
 export default function GeneratePage() {
   const [phase, setPhase] = useState<Phase>('topic');
   const [topic, setTopic] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
   const [numSections, setNumSections] = useState(4);
   const [numExercises, setNumExercises] = useState(5);
   const [numQuestions, setNumQuestions] = useState(5);
   const [error, setError] = useState('');
-  const [refused, setRefused] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const { job, startGeneration } = useGeneration();
+  const isGenerating = job?.status === 'running';
 
   function handleTopicSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!topic.trim()) return;
+    if (!topic.trim()) {
+      setError('A prompt is required');
+      return;
+    }
+    setError('');
     setPhase('customize');
   }
 
-  async function handleGenerate() {
-    setError('');
-    setRefused('');
-    setPhase('generating');
-
-    try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic,
-          numSections,
-          numExercises,
-          numQuestions,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (data.refused) {
-        setRefused(data.message);
-        setPhase('topic');
-        return;
-      }
-
-      if (data.error) {
-        setError(data.error);
-        setPhase('customize');
-        return;
-      }
-
-      router.push(`/dashboard/topics/${data.topic.id}`);
-    } catch {
-      setError("Something went sideways — want to try again?");
-      setPhase('customize');
+  function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files) {
+      setFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
     }
+    // Reset so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function removeFile(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleGenerate() {
+    if (!topic.trim()) {
+      setError('A prompt is required');
+      return;
+    }
+    if (isGenerating) {
+      setError('a topic is already generating — wait for it to finish');
+      return;
+    }
+    setError('');
+
+    const formData = new FormData();
+    formData.append('topic', topic);
+    formData.append('numSections', String(numSections));
+    formData.append('numExercises', String(numExercises));
+    formData.append('numQuestions', String(numQuestions));
+    for (const file of files) {
+      formData.append('files', file);
+    }
+
+    const started = startGeneration(formData, topic.trim());
+    if (!started) {
+      setError('a topic is already generating — wait for it to finish');
+      return;
+    }
+
+    router.push('/dashboard');
   }
 
   return (
@@ -90,22 +103,62 @@ export default function GeneratePage() {
                 type="text"
                 placeholder="What do you want to learn about today?"
                 value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                required
+                onChange={(e) => { setTopic(e.target.value); setError(''); }}
                 maxLength={200}
                 className="w-full rounded-lg px-5 py-4 text-base outline-none transition-colors focus:ring-2 focus:ring-[#e2b714]"
                 style={{ backgroundColor: '#2c2e31', color: '#d1d0c5', border: '1px solid #3d3f42' }}
               />
 
-              {refused && (
-                <p className="text-sm px-1 leading-relaxed" style={{ color: '#e2b714' }}>
-                  {refused}
+              {error && (
+                <p className="text-sm px-1" style={{ color: '#ca4754' }}>
+                  {error}
                 </p>
               )}
 
+              {/* File Upload */}
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ACCEPTED_EXTENSIONS}
+                  multiple
+                  onChange={handleFilesSelected}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="rounded-lg px-4 py-3 text-sm transition-all hover:opacity-90"
+                  style={{ backgroundColor: '#2c2e31', color: '#d1d0c5', border: '1px solid #3d3f42' }}
+                >
+                  + attach files (pdf, docx, txt, md)
+                </button>
+
+                {files.length > 0 && (
+                  <ul className="mt-3 flex flex-col gap-2">
+                    {files.map((file, i) => (
+                      <li
+                        key={`${file.name}-${i}`}
+                        className="flex items-center justify-between rounded-lg px-4 py-2 text-sm"
+                        style={{ backgroundColor: '#2c2e31', color: '#d1d0c5' }}
+                      >
+                        <span className="truncate mr-3">{file.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(i)}
+                          className="flex-shrink-0 text-xs transition-colors hover:text-[#ca4754]"
+                          style={{ color: '#646669' }}
+                        >
+                          remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
               <button
                 type="submit"
-                disabled={!topic.trim()}
                 className="w-full rounded-lg px-5 py-4 text-base font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
                 style={{ backgroundColor: '#e2b714', color: '#323437' }}
               >
@@ -139,7 +192,7 @@ export default function GeneratePage() {
                   <input
                     type="range"
                     min={1}
-                    max={12}
+                    max={8}
                     value={numSections}
                     onChange={(e) => setNumSections(Number(e.target.value))}
                     className="flex-1 accent-[#e2b714]"
@@ -165,7 +218,7 @@ export default function GeneratePage() {
                   <input
                     type="range"
                     min={1}
-                    max={20}
+                    max={10}
                     value={numExercises}
                     onChange={(e) => setNumExercises(Number(e.target.value))}
                     className="flex-1 accent-[#e2b714]"
@@ -191,7 +244,7 @@ export default function GeneratePage() {
                   <input
                     type="range"
                     min={1}
-                    max={20}
+                    max={10}
                     value={numQuestions}
                     onChange={(e) => setNumQuestions(Number(e.target.value))}
                     className="flex-1 accent-[#e2b714]"
@@ -235,26 +288,16 @@ export default function GeneratePage() {
               </button>
               <button
                 onClick={handleGenerate}
-                className="flex-1 rounded-lg px-5 py-4 text-base font-medium transition-opacity hover:opacity-90"
+                disabled={isGenerating}
+                className="flex-1 rounded-lg px-5 py-4 text-base font-medium transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: '#e2b714', color: '#323437' }}
               >
-                let&apos;s explore this!
+                {isGenerating ? 'a topic is already generating…' : "let's explore this!"}
               </button>
             </div>
           </>
         )}
 
-        {/* Phase 3: Generating */}
-        {phase === 'generating' && (
-          <div className="text-center mt-10">
-            <p className="text-base mb-3" style={{ color: '#d1d0c5' }}>
-              generating your topic...
-            </p>
-            <p className="text-sm" style={{ color: '#646669' }}>
-              creating {numSections} sections with {numExercises} exercises and {numQuestions} questions each — hang tight
-            </p>
-          </div>
-        )}
       </div>
     </main>
   );

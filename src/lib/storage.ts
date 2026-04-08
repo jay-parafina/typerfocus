@@ -1,6 +1,6 @@
 import { ModuleProgress, PhraseResult, QuizResult } from './types';
 
-const PROGRESS_KEY = 'typewise_progress';
+const PROGRESS_KEY = 'typerfocus_progress';
 
 function getAllProgress(): Record<string, ModuleProgress> {
   if (typeof window === 'undefined') return {};

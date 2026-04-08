@@ -28,10 +28,10 @@ export interface EngineState {
    * typedAt[i] = the character the user actually pressed at position i.
    * undefined means the user has not yet reached that position.
    *
-   * Stop-on-error semantics:
-   *   - cursorPos advances only when typedAt[cursorPos] === phrase[cursorPos]
-   *   - A wrong char is stored at typedAt[cursorPos] and blocks the cursor
-   *   - Backspace clears the blocking char (or retreats past a correct one)
+   * Move-forward semantics (MonkeyType-style):
+   *   - cursorPos advances on every keypress, correct or wrong
+   *   - Wrong chars are stored and shown in red but don't block
+   *   - Backspace retreats and clears the previous character
    */
   typedAt: (string | undefined)[];
   /** Index of the character the cursor sits before (= next char to type). */
@@ -78,6 +78,14 @@ type Action =
       startTime: number;
       totalKeystrokes: number;
       wrongKeystrokes: number;
+    }
+  | {
+      type: 'WRONG_LAST';
+      pos: number;
+      char: string;
+      result: PhraseResult;
+      wpm: number;
+      accuracy: number;
     }
   | { type: 'BACKSPACE' }
   | { type: 'NEXT_PHRASE' }
@@ -142,7 +150,7 @@ function reducer(state: EngineState, action: Action): EngineState {
       return {
         ...state,
         typedAt,
-        // cursorPos does NOT advance on wrong input
+        cursorPos: action.pos + 1,
         totalKeystrokes: action.totalKeystrokes,
         wrongKeystrokes: action.wrongKeystrokes,
         startTime: action.startTime,
@@ -150,24 +158,32 @@ function reducer(state: EngineState, action: Action): EngineState {
       };
     }
 
+    case 'WRONG_LAST': {
+      const typedAt = state.typedAt.slice();
+      typedAt[action.pos] = action.char;
+      return {
+        ...state,
+        typedAt,
+        cursorPos: action.pos + 1,
+        phase: 'phrase-done',
+        phraseWpm: action.wpm,
+        phraseAccuracy: action.accuracy,
+        results: [...state.results, action.result],
+        cursorKey: state.cursorKey + 1,
+      };
+    }
+
     case 'BACKSPACE': {
       const { cursorPos, typedAt } = state;
+      if (cursorPos <= 0) return state;
       const next = typedAt.slice();
-      if (next[cursorPos] !== undefined) {
-        // There is a wrong char at the cursor — clear it and stay put
-        next[cursorPos] = undefined;
-        return { ...state, typedAt: next, cursorKey: state.cursorKey + 1 };
-      } else if (cursorPos > 0) {
-        // No pending error — retreat and un-type the previous correct char
-        next[cursorPos - 1] = undefined;
-        return {
-          ...state,
-          typedAt: next,
-          cursorPos: cursorPos - 1,
-          cursorKey: state.cursorKey + 1,
-        };
-      }
-      return state; // already at start
+      next[cursorPos - 1] = undefined;
+      return {
+        ...state,
+        typedAt: next,
+        cursorPos: cursorPos - 1,
+        cursorKey: state.cursorKey + 1,
+      };
     }
 
     case 'NEXT_PHRASE':
@@ -315,26 +331,15 @@ export function useTypingEngine(
       const ci = s.cursorPos;
       if (ci >= text.length) return;
 
-      // Blocked: wrong char already at cursor, must backspace first
-      if (s.typedAt[ci] !== undefined) return;
-
       // ── Evaluate the keypress ─────────────────────────────────────────
       const isCorrect = e.key === text[ci];
       const startTime = s.startTime ?? Date.now();
       const newTotal = s.totalKeystrokes + 1;
       const newWrong = s.wrongKeystrokes + (isCorrect ? 0 : 1);
+      const isLast = ci === text.length - 1;
 
-      if (!isCorrect) {
-        dispatch({ type: 'WRONG', pos: ci, char: e.key, startTime, totalKeystrokes: newTotal, wrongKeystrokes: newWrong });
-        return;
-      }
-
-      // Correct keypress
-      if (ci < text.length - 1) {
-        // Not the last char — just advance
-        dispatch({ type: 'CORRECT', pos: ci, char: e.key, startTime, totalKeystrokes: newTotal, wrongKeystrokes: newWrong });
-      } else {
-        // Last char — phrase complete
+      if (isLast) {
+        // Last char — phrase complete regardless of correct/wrong
         const wpm = calcWpm(text.length, startTime);
         const accuracy = calcAccuracy(newTotal, newWrong);
         const result: PhraseResult = {
@@ -346,7 +351,15 @@ export function useTypingEngine(
           totalChars: text.length,
         };
         onPhraseCompleteRef.current(result);
-        dispatch({ type: 'CORRECT_LAST', pos: ci, char: e.key, result, wpm, accuracy });
+        if (isCorrect) {
+          dispatch({ type: 'CORRECT_LAST', pos: ci, char: e.key, result, wpm, accuracy });
+        } else {
+          dispatch({ type: 'WRONG_LAST', pos: ci, char: e.key, result, wpm, accuracy });
+        }
+      } else if (isCorrect) {
+        dispatch({ type: 'CORRECT', pos: ci, char: e.key, startTime, totalKeystrokes: newTotal, wrongKeystrokes: newWrong });
+      } else {
+        dispatch({ type: 'WRONG', pos: ci, char: e.key, startTime, totalKeystrokes: newTotal, wrongKeystrokes: newWrong });
       }
     },
     [nextPhrase, restartPhrase] // stable: nextPhrase/restartPhrase are useCallback([])

@@ -33,7 +33,9 @@ function normalizeTypography(s: string): string {
     .replace(/\u2014|\u2015/g, '--')                      // em dash → --
     .replace(/\u2013/g, '-')                              // en dash → -
     .replace(/\u2026/g, '...')                            // ellipsis → ...
-    .replace(/\u00a0/g, ' ');                             // non-breaking space → space
+    .replace(/\u00a0/g, ' ')                              // non-breaking space → space
+    .replace(/\p{Extended_Pictographic}/gu, '')            // remove all pictographic emoji (🎯, 🗣️, etc.)
+    .replace(/[\u{FE00}-\u{FE0F}\u{200D}]/gu, '');        // remove variation selectors and zero-width joiners left behind
 }
 
 export function chunkArticle(raw: string): string[] {

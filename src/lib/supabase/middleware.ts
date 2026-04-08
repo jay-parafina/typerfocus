@@ -29,6 +29,13 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Root route — redirect based on auth status
+  if (request.nextUrl.pathname === '/') {
+    const url = request.nextUrl.clone();
+    url.pathname = user ? '/dashboard' : '/signup';
+    return NextResponse.redirect(url);
+  }
+
   // Protected routes — redirect to /login if not authenticated
   const protectedPaths = ['/dashboard'];
   const isProtected = protectedPaths.some((p) =>
