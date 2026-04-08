@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -17,6 +18,18 @@ export default function SignupPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    const res = await fetch('/api/validate-invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inviteCode }),
+    });
+
+    if (!res.ok) {
+      setLoading(false);
+      setError('Invalid invite code.');
+      return;
+    }
 
     const { error } = await supabase.auth.signUp({
       email,
@@ -53,6 +66,15 @@ export default function SignupPage() {
         </p>
 
         <form onSubmit={handleSignup} className="flex flex-col gap-5">
+          <input
+            type="text"
+            placeholder="invite code"
+            value={inviteCode}
+            onChange={(e) => setInviteCode(e.target.value)}
+            required
+            className="w-full rounded-lg px-5 py-4 text-base outline-none transition-colors focus:ring-2 focus:ring-[#e2b714]"
+            style={{ backgroundColor: '#2c2e31', color: '#d1d0c5', border: '1px solid #3d3f42' }}
+          />
           <input
             type="email"
             placeholder="email"
