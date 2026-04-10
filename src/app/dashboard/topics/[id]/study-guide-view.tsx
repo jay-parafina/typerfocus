@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useReadAloud } from '@/hooks/useReadAloud';
-import type { StudyKitData } from '@/types/study-kit';
 
 const TEAL = '#2dd4bf';
 const AMBER = '#e2b714';
@@ -40,33 +39,49 @@ export default function StudyGuideView({ topic, sections }: StudyGuideViewProps)
     speak(selection || allText);
   }
 
-  async function handleExportPdf() {
+  function handleExportPdf() {
     setExporting(true);
     setExportError('');
     try {
-      const guideData: StudyKitData = {
-        title: topic.title,
-        overview: topic.overview,
-        key_concepts: topic.key_concepts,
-        sections: sections.map((s) => ({ title: s.title, body: s.body })),
-        typing_exercises: [],
+      const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const conceptsHtml = topic.key_concepts
+        .map((c) => `<span class="concept">${escHtml(c)}</span>`)
+        .join('');
+      const sectionsHtml = sections
+        .map((s, i) => `<div class="section"><h2>${i + 1}. ${escHtml(s.title)}</h2><p>${escHtml(s.body)}</p></div>`)
+        .join('');
+
+      const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><title>${escHtml(topic.title)}</title>
+<style>
+  body { font-family: Georgia, 'Times New Roman', serif; max-width: 680px; margin: 40px auto; padding: 0 24px; color: #1a1a1a; line-height: 1.6; }
+  h1 { font-size: 26px; margin-bottom: 6px; }
+  .overview { font-size: 15px; color: #444; margin-bottom: 24px; }
+  .concepts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 28px; }
+  .concept { background: #eee; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-family: sans-serif; }
+  .section { margin-bottom: 22px; }
+  .section h2 { font-size: 18px; margin-bottom: 4px; }
+  .section p { font-size: 14px; color: #333; }
+  @media print { body { margin: 0; } }
+</style></head>
+<body>
+  <h1>${escHtml(topic.title)}</h1>
+  <p class="overview">${escHtml(topic.overview)}</p>
+  <div class="concepts">${conceptsHtml}</div>
+  ${sectionsHtml}
+</body></html>`;
+
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        setExportError('Pop-up blocked — allow pop-ups and try again.');
+        return;
+      }
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.print();
+        printWindow.onafterprint = () => printWindow.close();
       };
-
-      const res = await fetch('/api/export-study-guide', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guideData, topic: topic.title }),
-      });
-
-      if (!res.ok) throw new Error('Export failed');
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${topic.title.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '-').toLowerCase()}-study-guide.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
     } catch {
       setExportError('Failed to export PDF — try again.');
     } finally {
