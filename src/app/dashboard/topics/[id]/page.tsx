@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import TopicSections from './topic-sections';
+import StudyGuideView from './study-guide-view';
 
 export default async function TopicPage({
   params,
@@ -56,6 +57,20 @@ export default async function TopicPage({
             year: 'numeric',
           })}
         </p>
+
+        {topic.overview && (
+          <StudyGuideView
+            topic={{
+              title: topic.title,
+              overview: topic.overview,
+              key_concepts: topic.key_concepts || [],
+            }}
+            sections={(sections || []).map((s: { title: string; body: string }) => ({
+              title: s.title,
+              body: s.body || '',
+            }))}
+          />
+        )}
 
         <TopicSections sections={sections || []} topicId={id} />
 

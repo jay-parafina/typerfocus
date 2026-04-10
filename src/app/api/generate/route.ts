@@ -37,10 +37,13 @@ JSON structure:
   "refused": false,
   "title": "Topic Title",
   "description": "One sentence overview of the topic.",
+  "overview": "A 2-3 sentence paragraph summarizing the entire topic. This serves as the introduction to the study guide.",
+  "key_concepts": ["concept1", "concept2", "concept3", "concept4"],
   "sections": [
     {
       "title": "Section Title",
       "description": "What this section covers.",
+      "body": "A 3-5 sentence readable explanation of this section's content. This is the study guide text the user reads before practicing.",
       "order": 1,
       "phrases": [
         {"text": "A short educational sentence to type.", "order": 1}
@@ -59,7 +62,12 @@ JSON structure:
       ]
     }
   ]
-}`;
+}
+
+IMPORTANT:
+- "overview" must be a substantive 2-3 sentence summary, not a repeat of "description"
+- "key_concepts" must have 4-8 short concept strings (like tags)
+- Each section "body" must be 3-5 sentences of readable prose explaining the subtopic`;
 }
 
 export async function POST(request: NextRequest) {
@@ -111,9 +119,9 @@ export async function POST(request: NextRequest) {
 
   // Scale max_tokens: each exercise ~50 tokens, each question ~100 tokens in actual JSON output
   // Add generous overhead for section structure, keys, and formatting
-  const baseTokens = sections * (exercises * 50 + questions * 120 + 200) + 1000;
-  // Always give at least 8000 tokens — small topics still produce verbose JSON
-  const minTokens = sources.length > 0 ? 16000 : 8000;
+  // Extra tokens for overview (~100), key_concepts (~50), and body per section (~150)
+  const baseTokens = sections * (exercises * 50 + questions * 120 + 200 + 150) + 1150;
+  const minTokens = sources.length > 0 ? 16000 : 10000;
   const estimatedTokens = Math.max(minTokens, Math.min(32000, baseTokens));
 
   // Build user prompt with optional source material
@@ -164,9 +172,12 @@ export async function POST(request: NextRequest) {
       message?: string;
       title?: string;
       description?: string;
+      overview?: string;
+      key_concepts?: string[];
       sections?: {
         title: string;
         description: string;
+        body?: string;
         order: number;
         phrases: { text: string; order: number }[];
         quiz: {
@@ -197,6 +208,8 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         title: parsed.title,
         description: parsed.description || '',
+        overview: parsed.overview || '',
+        key_concepts: parsed.key_concepts || [],
       })
       .select()
       .single();
@@ -216,6 +229,7 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         title: s.title,
         description: s.description || '',
+        body: s.body || '',
         order_num: s.order || i + 1,
         phrases: s.phrases || [],
         quiz: s.quiz || [],
