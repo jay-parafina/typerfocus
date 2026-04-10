@@ -2,6 +2,29 @@
 
 @import "tailwindcss";
 
+/* OpenDyslexic — self-hosted accessibility font */
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('/fonts/OpenDyslexic-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('/fonts/OpenDyslexic-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('/fonts/OpenDyslexic-Italic.otf') format('opentype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
   --bg: #323437;
   --text-dim: #646669;
@@ -41,4 +64,12 @@ body {
 ::-webkit-scrollbar-thumb {
   background: #646669;
   border-radius: 2px;
+}
+
+/* OpenDyslexic font — applied only to content surfaces via data attribute */
+[data-font="opendyslexic"] .content-text {
+  font-family: 'OpenDyslexic', sans-serif;
+  line-height: 1.8;
+  letter-spacing: 0.05em;
+  word-spacing: 0.1em;
 }

@@ -26,7 +26,7 @@ export function PhraseDisplay({ text, typedAt, cursorPos, cursorKey }: PhraseDis
      * This keeps character spacing pixel-perfect at all sizes.
      */
     <div
-      className="text-center select-none"
+      className="content-text text-center select-none"
       style={{ fontSize: 0, lineHeight: '2.2rem' }}
     >
       {text.split('').map((char, i) => {

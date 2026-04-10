@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { StagingBanner } from '@/components/StagingBanner';
+import { AccessibilityProvider } from '@/context/AccessibilityContext';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -15,8 +16,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        <StagingBanner />
-        {children}
+        <AccessibilityProvider>
+          <StagingBanner />
+          {children}
+        </AccessibilityProvider>
       </body>
     </html>
   );

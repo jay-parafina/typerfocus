@@ -134,37 +134,39 @@ export default function StudyGuideView({ topic, sections }: StudyGuideViewProps)
             <p className="text-sm mb-4" style={{ color: RED }}>{exportError}</p>
           )}
 
-          {/* Overview */}
-          <p className="text-sm leading-relaxed mb-6" style={{ color: TEXT }}>
-            {topic.overview}
-          </p>
+          <div className="content-text">
+            {/* Overview */}
+            <p className="text-sm leading-relaxed mb-6" style={{ color: TEXT }}>
+              {topic.overview}
+            </p>
 
-          {/* Key concepts */}
-          {topic.key_concepts.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-6">
-              {topic.key_concepts.map((c, i) => (
-                <span
-                  key={i}
-                  className="rounded-full px-3 py-1 text-xs"
-                  style={{ backgroundColor: '#323437', color: TEAL }}
-                >
-                  {c}
-                </span>
-              ))}
-            </div>
-          )}
+            {/* Key concepts */}
+            {topic.key_concepts.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-6">
+                {topic.key_concepts.map((c, i) => (
+                  <span
+                    key={i}
+                    className="rounded-full px-3 py-1 text-xs"
+                    style={{ backgroundColor: '#323437', color: TEAL }}
+                  >
+                    {c}
+                  </span>
+                ))}
+              </div>
+            )}
 
-          {/* Section content */}
-          {sections.map((section, i) => (
-            <div key={i} className="mb-5 last:mb-0">
-              <h3 className="text-sm font-medium mb-1" style={{ color: TEXT }}>
-                {i + 1}. {section.title}
-              </h3>
-              <p className="text-sm leading-relaxed" style={{ color: DIM }}>
-                {section.body}
-              </p>
-            </div>
-          ))}
+            {/* Section content */}
+            {sections.map((section, i) => (
+              <div key={i} className="mb-5 last:mb-0">
+                <h3 className="text-sm font-medium mb-1" style={{ color: TEXT }}>
+                  {i + 1}. {section.title}
+                </h3>
+                <p className="text-sm leading-relaxed" style={{ color: DIM }}>
+                  {section.body}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
