@@ -43,29 +43,6 @@ body {
   border-radius: 2px;
 }
 
-/* OpenDyslexic — self-hosted accessibility font */
-@font-face {
-  font-family: 'OpenDyslexic';
-  src: url('/fonts/OpenDyslexic-Regular.otf') format('opentype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'OpenDyslexic';
-  src: url('/fonts/OpenDyslexic-Bold.otf') format('opentype');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'OpenDyslexic';
-  src: url('/fonts/OpenDyslexic-Italic.otf') format('opentype');
-  font-weight: 400;
-  font-style: italic;
-  font-display: swap;
-}
-
 /* OpenDyslexic font — applied only to content surfaces via data attribute */
 [data-font="opendyslexic"] .content-text,
 [data-font="opendyslexic"] .content-text * {
