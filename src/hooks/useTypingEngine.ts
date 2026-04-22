@@ -50,6 +50,11 @@ export interface EngineState {
    * appears solid while typing and only blinks during idle.
    */
   cursorKey: number;
+  /**
+   * When non-null, user is reviewing a prior phrase (read-only). Always
+   * < phraseIndex. Null means normal typing mode.
+   */
+  reviewIndex: number | null;
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────────
@@ -91,7 +96,9 @@ type Action =
   | { type: 'NEXT_PHRASE' }
   | { type: 'RESTART_PHRASE' }
   | { type: 'TAB_DOWN' }
-  | { type: 'TAB_UP' };
+  | { type: 'TAB_UP' }
+  | { type: 'REVIEW_PREV' }
+  | { type: 'REVIEW_NEXT' };
 
 // ─── Reducer ───────────────────────────────────────────────────────────────
 
@@ -110,7 +117,13 @@ function blankPhrase() {
 }
 
 function init(): EngineState {
-  return { phraseIndex: 0, results: [], cursorKey: 0, ...blankPhrase() };
+  return {
+    phraseIndex: 0,
+    results: [],
+    cursorKey: 0,
+    reviewIndex: null,
+    ...blankPhrase(),
+  };
 }
 
 function reducer(state: EngineState, action: Action): EngineState {
@@ -192,6 +205,7 @@ function reducer(state: EngineState, action: Action): EngineState {
         phraseIndex: state.phraseIndex + 1,
         results: state.results,
         cursorKey: state.cursorKey + 1,
+        reviewIndex: null,
       };
 
     case 'RESTART_PHRASE':
@@ -200,12 +214,50 @@ function reducer(state: EngineState, action: Action): EngineState {
         phraseIndex: state.phraseIndex,
         results: state.results,
         cursorKey: state.cursorKey + 1,
+        reviewIndex: null,
       };
 
     case 'TAB_DOWN':
       return { ...state, tabDown: true };
     case 'TAB_UP':
       return { ...state, tabDown: false };
+
+    case 'REVIEW_PREV': {
+      // Already reviewing → step further back, or hold at 0
+      if (state.reviewIndex !== null) {
+        if (state.reviewIndex <= 0) return state;
+        return { ...state, reviewIndex: state.reviewIndex - 1 };
+      }
+      // From phase-done: advance past the just-completed phrase, then review it.
+      // Avoids the awkward state where forward-from-review re-enters the
+      // phrase-done flash for a phrase already recorded in `results`.
+      if (state.phase === 'phrase-done') {
+        return {
+          ...blankPhrase(),
+          phraseIndex: state.phraseIndex + 1,
+          results: state.results,
+          cursorKey: state.cursorKey + 1,
+          reviewIndex: state.phraseIndex,
+        };
+      }
+      // From typing: discard in-progress chars, review the previous phrase.
+      if (state.phraseIndex <= 0) return state;
+      return {
+        ...blankPhrase(),
+        phraseIndex: state.phraseIndex,
+        results: state.results,
+        cursorKey: state.cursorKey + 1,
+        reviewIndex: state.phraseIndex - 1,
+      };
+    }
+
+    case 'REVIEW_NEXT': {
+      if (state.reviewIndex === null) return state;
+      if (state.reviewIndex < state.phraseIndex - 1) {
+        return { ...state, reviewIndex: state.reviewIndex + 1 };
+      }
+      return { ...state, reviewIndex: null };
+    }
 
     default:
       return state;
@@ -220,6 +272,10 @@ export interface UseTypingEngineReturn {
   nextPhrase: () => void;
   /** Call to restart the current phrase (Tab+Enter). */
   restartPhrase: () => void;
+  /** Enter review mode, or step further back while already reviewing. */
+  reviewPrev: () => void;
+  /** Step forward in review, or exit review mode when at the boundary. */
+  reviewNext: () => void;
 }
 
 export function useTypingEngine(
@@ -266,6 +322,18 @@ export function useTypingEngine(
     dispatch({ type: 'RESTART_PHRASE' });
   }, []);
 
+  const reviewPrev = useCallback(() => {
+    if (autoAdvanceTimer.current) {
+      clearTimeout(autoAdvanceTimer.current);
+      autoAdvanceTimer.current = null;
+    }
+    dispatch({ type: 'REVIEW_PREV' });
+  }, []);
+
+  const reviewNext = useCallback(() => {
+    dispatch({ type: 'REVIEW_NEXT' });
+  }, []);
+
   // Watch for phrase-done → kick off 1.5 s timer
   useEffect(() => {
     if (state.phase === 'phrase-done') {
@@ -293,6 +361,19 @@ export function useTypingEngine(
       if (e.key === 'Tab') {
         e.preventDefault(); // prevent focus shift
         dispatch({ type: 'TAB_DOWN' });
+        return;
+      }
+
+      // ── Review mode: only review navigation / Escape are meaningful ──
+      if (s.reviewIndex !== null) {
+        if (e.key === 'ArrowLeft') reviewPrev();
+        else if (e.key === 'ArrowRight' || e.key === 'Enter') reviewNext();
+        return;
+      }
+
+      // ── ArrowLeft enters review (works in both typing and phrase-done) ──
+      if (e.key === 'ArrowLeft') {
+        reviewPrev();
         return;
       }
 
@@ -362,7 +443,7 @@ export function useTypingEngine(
         dispatch({ type: 'WRONG', pos: ci, char: e.key, startTime, totalKeystrokes: newTotal, wrongKeystrokes: newWrong });
       }
     },
-    [nextPhrase, restartPhrase] // stable: nextPhrase/restartPhrase are useCallback([])
+    [nextPhrase, restartPhrase, reviewPrev, reviewNext] // all stable via useCallback([])
   );
 
   // Register once, never re-register
@@ -385,5 +466,11 @@ export function useTypingEngine(
   const stableNextPhrase = useMemo(() => nextPhrase, [nextPhrase]);
   const stableRestartPhrase = useMemo(() => restartPhrase, [restartPhrase]);
 
-  return { state, nextPhrase: stableNextPhrase, restartPhrase: stableRestartPhrase };
+  return {
+    state,
+    nextPhrase: stableNextPhrase,
+    restartPhrase: stableRestartPhrase,
+    reviewPrev,
+    reviewNext,
+  };
 }

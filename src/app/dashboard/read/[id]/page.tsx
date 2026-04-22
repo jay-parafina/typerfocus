@@ -69,13 +69,18 @@ function ReadSession({ title, chunks, onBack }: { title: string; chunks: string[
   const sessionStartRef = useRef(Date.now());
   const phrases = useMemo(() => chunksToPhphrases(chunks), [chunks]);
 
-  const { state, nextPhrase } = useTypingEngine(phrases, {
+  const { state, nextPhrase, reviewPrev, reviewNext } = useTypingEngine(phrases, {
     onPhraseComplete: () => {},
     onEscape: onBack,
   });
 
-  const isComplete = state.phraseIndex >= phrases.length;
+  const reviewingPhrase =
+    state.reviewIndex !== null ? phrases[state.reviewIndex] : null;
+  const isReviewing = reviewingPhrase !== null;
+  const isComplete = state.phraseIndex >= phrases.length && !isReviewing;
   const currentPhrase = phrases[state.phraseIndex];
+  const displayedIndex = isReviewing ? (state.reviewIndex as number) : state.phraseIndex;
+  const prevDisabled = isReviewing ? state.reviewIndex === 0 : state.phraseIndex === 0;
 
   const avgWpm = state.results.length
     ? Math.round(state.results.reduce((s, r) => s + r.wpm, 0) / state.results.length)
@@ -126,13 +131,25 @@ function ReadSession({ title, chunks, onBack }: { title: string; chunks: string[
     <div className="min-h-screen flex flex-col" style={{ userSelect: 'none', cursor: 'default' }}>
       {/* Top bar */}
       <div className="flex items-center justify-between px-8 py-5">
-        <button
-          onClick={onBack}
-          className="text-sm transition-colors hover:text-[#d1d0c5]"
-          style={{ color: '#646669' }}
-        >
-          ← back
-        </button>
+        <div className="flex items-center gap-6">
+          <button
+            onClick={onBack}
+            className="text-sm transition-colors hover:text-[#d1d0c5]"
+            style={{ color: '#646669' }}
+          >
+            ← back
+          </button>
+          <button
+            onClick={reviewPrev}
+            disabled={prevDisabled}
+            aria-label="Review previous phrase"
+            aria-keyshortcuts="ArrowLeft"
+            className="text-sm transition-colors hover:text-[#d1d0c5] disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{ color: '#646669' }}
+          >
+            ◀ prev phrase
+          </button>
+        </div>
         <span className="text-sm" style={{ color: '#646669' }}>
           read by typing
         </span>
@@ -152,7 +169,7 @@ function ReadSession({ title, chunks, onBack }: { title: string; chunks: string[
       {/* Chunk counter */}
       <div className="flex justify-center pt-5">
         <span className="tabular-nums text-sm" style={{ color: '#646669' }}>
-          {state.phraseIndex + 1} / {phrases.length}
+          {displayedIndex + 1} / {phrases.length}
         </span>
       </div>
 
@@ -166,7 +183,14 @@ function ReadSession({ title, chunks, onBack }: { title: string; chunks: string[
             {title}
           </p>
 
-          {state.phase === 'phrase-done' ? (
+          {reviewingPhrase ? (
+            <ReviewView
+              text={reviewingPhrase.text}
+              reviewIndex={state.reviewIndex as number}
+              total={phrases.length}
+              onResume={reviewNext}
+            />
+          ) : state.phase === 'phrase-done' ? (
             <PhraseDoneFlash
               wpm={state.phraseWpm}
               accuracy={state.phraseAccuracy}
@@ -186,9 +210,49 @@ function ReadSession({ title, chunks, onBack }: { title: string; chunks: string[
       {/* Hints */}
       <div className="flex justify-center pb-8">
         <span className="text-xs" style={{ color: '#3d3f42' }}>
-          esc — back &nbsp;&nbsp;·&nbsp;&nbsp; tab + enter — restart phrase
+          esc — back &nbsp;&nbsp;·&nbsp;&nbsp; ← prev phrase &nbsp;&nbsp;·&nbsp;&nbsp; tab + enter — restart phrase
         </span>
       </div>
+    </div>
+  );
+}
+
+function ReviewView({
+  text,
+  reviewIndex,
+  total,
+  onResume,
+}: {
+  text: string;
+  reviewIndex: number;
+  total: number;
+  onResume: () => void;
+}) {
+  return (
+    <div className="text-center">
+      <div
+        role="status"
+        aria-live="polite"
+        className="text-xs uppercase tracking-widest mb-6"
+        style={{ color: '#e2b714' }}
+      >
+        reviewing phrase {reviewIndex + 1} of {total}
+      </div>
+      <p
+        className="content-text text-center mb-8"
+        style={{ fontSize: '1.5rem', lineHeight: '2.2rem', color: '#d1d0c5' }}
+      >
+        {text}
+      </p>
+      <button
+        onClick={onResume}
+        aria-label="Resume typing"
+        aria-keyshortcuts="ArrowRight"
+        className="text-sm transition-colors hover:text-[#d1d0c5]"
+        style={{ color: '#646669' }}
+      >
+        resume →
+      </button>
     </div>
   );
 }
