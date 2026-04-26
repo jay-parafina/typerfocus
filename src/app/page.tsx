@@ -318,7 +318,7 @@ export default async function HomePage() {
         className="px-6 sm:px-10 py-10 text-center text-sm fade-in"
         style={{ color: '#646669', animationDelay: '480ms' }}
       >
-        Built with care in the East Bay
+        Built with care in El Sobrante, CA
       </footer>
     </main>
   );
