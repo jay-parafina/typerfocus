@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { LeadForm } from '@/components/LeadForm';
+import { Logo } from '@/components/Logo';
 
 export const metadata: Metadata = {
   title: 'TyperFocus — E-learning, rebuilt for neurodivergent minds.',
@@ -73,12 +74,14 @@ export default async function HomePage() {
         className="flex items-center justify-between px-6 sm:px-10 py-6 fade-in"
         style={{ animationDelay: '0ms' }}
       >
-        <span
-          className="font-light tracking-[0.2em] text-lg"
+        <Link
+          href="/"
+          aria-label="TyperFocus home"
+          className="inline-flex items-center"
           style={{ color: '#e2b714' }}
         >
-          typerfocus
-        </span>
+          <Logo variant="full" />
+        </Link>
         <div className="flex items-center gap-4 sm:gap-6 text-sm">
           {user ? (
             <Link

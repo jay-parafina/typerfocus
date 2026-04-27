@@ -6,8 +6,21 @@ import '@fontsource/opendyslexic/400-italic.css';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'TyperFocus',
-  description: 'Learn topics while you type.',
+  metadataBase: new URL('https://typerfocus.co'),
+  title: { default: 'TyperFocus', template: '%s · TyperFocus' },
+  description: 'E-learning, rebuilt for neurodivergent minds.',
+  openGraph: {
+    title: 'TyperFocus',
+    description: 'E-learning, rebuilt for neurodivergent minds.',
+    url: 'https://typerfocus.co',
+    siteName: 'TyperFocus',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'TyperFocus',
+    description: 'E-learning, rebuilt for neurodivergent minds.',
+  },
 };
 
 export default function RootLayout({
