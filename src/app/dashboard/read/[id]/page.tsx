@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { chunksToPhphrases } from '@/lib/chunker';
@@ -12,6 +12,8 @@ interface ReadingSession {
   title: string;
   phrases: { text: string; order: number }[];
   phrase_count: number;
+  total_chunks: number | null;
+  current_chunk_index: number | null;
 }
 
 export default function ReadPracticePage() {
@@ -27,7 +29,7 @@ export default function ReadPracticePage() {
       const supabase = createClient();
       const { data } = await supabase
         .from('reading_sessions')
-        .select('id, title, phrases, phrase_count')
+        .select('id, title, phrases, phrase_count, total_chunks, current_chunk_index')
         .eq('id', sessionId)
         .single();
 
@@ -38,6 +40,14 @@ export default function ReadPracticePage() {
 
       setSession(data);
       setLoading(false);
+
+      // Touch last_accessed_at so the saved-readings list reflects this resume.
+      // Fire-and-forget; errors are non-blocking.
+      fetch(`/api/reading-sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ touch: true }),
+      }).catch(() => {});
     }
 
     load();
@@ -52,26 +62,73 @@ export default function ReadPracticePage() {
   }
 
   const chunks = session.phrases.map((p) => p.text);
+  const initialIndex = session.current_chunk_index ?? 0;
 
   return (
     <ReadSession
       key={sessionId}
+      sessionId={sessionId}
       title={session.title}
       chunks={chunks}
+      initialPhraseIndex={initialIndex}
       onBack={() => router.push('/dashboard')}
     />
   );
 }
 
-// ─── ReadSession (self-contained for this page) ─────────────────────────────
+// ─── ReadSession ────────────────────────────────────────────────────────────
 
-function ReadSession({ title, chunks, onBack }: { title: string; chunks: string[]; onBack: () => void }) {
+function ReadSession({
+  sessionId,
+  title,
+  chunks,
+  initialPhraseIndex,
+  onBack,
+}: {
+  sessionId: string;
+  title: string;
+  chunks: string[];
+  initialPhraseIndex: number;
+  onBack: () => void;
+}) {
   const sessionStartRef = useRef(Date.now());
   const phrases = useMemo(() => chunksToPhphrases(chunks), [chunks]);
 
+  const completedRef = useRef(initialPhraseIndex);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerSavedFlash = useCallback(() => {
+    setSavedFlash(true);
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setSavedFlash(false), 1500);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    };
+  }, []);
+
+  const handlePhraseComplete = useCallback(async () => {
+    completedRef.current += 1;
+    const newIndex = completedRef.current;
+    try {
+      const res = await fetch(`/api/reading-sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_chunk_index: newIndex }),
+      });
+      if (res.ok) triggerSavedFlash();
+    } catch (err) {
+      console.error('Failed to update reading progress', err);
+    }
+  }, [sessionId, triggerSavedFlash]);
+
   const { state, nextPhrase, reviewPrev, reviewNext } = useTypingEngine(phrases, {
-    onPhraseComplete: () => {},
+    onPhraseComplete: handlePhraseComplete,
     onEscape: onBack,
+    initialPhraseIndex,
   });
 
   const reviewingPhrase =
@@ -166,10 +223,16 @@ function ReadSession({ title, chunks, onBack }: { title: string; chunks: string[
         />
       </div>
 
-      {/* Chunk counter */}
-      <div className="flex justify-center pt-5">
+      {/* Chunk counter + saved indicator */}
+      <div className="flex justify-center items-center gap-3 pt-5">
         <span className="tabular-nums text-sm" style={{ color: '#646669' }}>
           {displayedIndex + 1} / {phrases.length}
+        </span>
+        <span
+          className="text-xs uppercase tracking-widest transition-opacity duration-300"
+          style={{ color: '#e2b714', opacity: savedFlash ? 1 : 0 }}
+        >
+          saved
         </span>
       </div>
 

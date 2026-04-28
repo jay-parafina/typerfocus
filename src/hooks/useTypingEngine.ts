@@ -116,9 +116,9 @@ function blankPhrase() {
   };
 }
 
-function init(): EngineState {
+function init(initialPhraseIndex: number = 0): EngineState {
   return {
-    phraseIndex: 0,
+    phraseIndex: initialPhraseIndex,
     results: [],
     cursorKey: 0,
     reviewIndex: null,
@@ -283,9 +283,12 @@ export function useTypingEngine(
   opts: {
     onPhraseComplete: (result: PhraseResult) => void;
     onEscape: () => void;
+    /** Phrase index to start at (used to resume saved readings). Defaults to 0. */
+    initialPhraseIndex?: number;
   }
 ): UseTypingEngineReturn {
-  const [state, dispatch] = useReducer(reducer, undefined, init);
+  const initial = Math.max(0, Math.min(opts.initialPhraseIndex ?? 0, phrases.length));
+  const [state, dispatch] = useReducer(reducer, initial, init);
 
   // Always-current ref — lets the stable keydown listener read fresh state
   // without ever being re-registered (zero re-registration overhead).
